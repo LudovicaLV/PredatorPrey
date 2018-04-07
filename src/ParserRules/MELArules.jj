@@ -1,0 +1,359 @@
+options {
+  STATIC = false;
+}
+
+PARSER_BEGIN(MELArules)
+
+package ParserRules;
+
+import java.util.ArrayList;
+import Model.GlobalManager;
+import Model.Simulator2;
+
+public class MELArules {
+       
+    public MELArules() {
+        this(new java.io.StringReader(""));
+    }
+
+    public void parseFromString( String modelDef ) throws ParseException, TokenMgrError, NumberFormatException {
+        this.ReInit(new java.io.StringReader(modelDef));
+        this.Input();
+    }
+
+    public void parseFromFile( String filename ) throws ParseException, TokenMgrError, NumberFormatException {
+        try { this.ReInit(new java.io.FileReader(filename)); }
+        catch(java.io.IOException e) {throw new ParseException("Error while opening file " + filename + ": " + e); }
+        this.Input();
+    }
+
+}
+
+PARSER_END(MELArules)
+
+/***************************************************************
+SKIP
+***************************************************************/
+
+<DEFAULT,RESET,ID> SKIP :
+{
+  " "
+  | "\t"
+  | "\n"
+  | "\r"
+
+  | <"//" (~["\n","\r"])* ("\n"|"\r"|"\r\n")>
+  | <"/*" (~["*"])* "*" (~["/"] (~["*"])* "*")* "/">
+}
+
+
+/***************************************************************
+TOKENS
+***************************************************************/
+
+ /* LITERALS */
+TOKEN : { < #INTEGER: ("-")? ["0"-"9"] (["0"-"9"])* > }
+TOKEN : { < #FLOAT:
+                            ("-")?  (["0"-"9"])+ "." (["0"-"9"])*
+                            | ("-")?  "." (["0"-"9"])+
+                    > }
+TOKEN : { < #FLOAT_SCIENTIFIC:
+                             ("-")? (["0"-"9"])+ "." (["0"-"9"])* (<EXPONENT>)
+                            |  ("-")? "." (["0"-"9"])+ (<EXPONENT>)
+                            |  ("-")? (["0"-"9"])+ <EXPONENT>
+                    > }
+TOKEN : { < #EXPONENT: ["e","E"] (["+","-"])? (["0"-"9"])+ > }
+TOKEN: { < #LETTER: ["A"-"Z","a"-"z"] > }
+TOKEN: { < #DIGIT: ["0"-"9"] > }
+
+TOKEN: { < #WORD: (["A"-"Z","a"-"z"])+ > }
+
+	
+/*
+IDENTIFIERS
+*/
+
+<DEFAULT> TOKEN : { <SECTION_NAME : "#Action" > }
+
+<DEFAULT> TOKEN : { <SECTION_FOCUS : "#Focus" > }
+
+<DEFAULT> TOKEN : { <SECTION_RUN : "#Runs" > }
+
+<DEFAULT> TOKEN : { <SECTION_STEP : "#Time-step" > }
+
+<DEFAULT> TOKEN : { <KEYWORD_ACTIVE : "a" > }
+<DEFAULT> TOKEN : { <KEYWORD_PASSIVE : "p" > }
+<DEFAULT> TOKEN : { <KEYWORD_NOINF : "/" > }
+
+<DEFAULT> TOKEN : { <KEYWORD_TIME : "#Time" > }
+
+<DEFAULT> TOKEN : { <KEYWORD_BOUNDARY : "#Boundary" > }
+<DEFAULT> TOKEN : { <KEYWORD_PERIODIC : "Periodic" > }
+<DEFAULT> TOKEN : { <KEYWORD_BOUNCING : "Bouncing" > }
+<DEFAULT> TOKEN : { <KEYWORD_FIXED : "Fixed" > }
+
+<DEFAULT> TOKEN : { <KEYWORD_POPULATION : "#Population" > }
+<DEFAULT> TOKEN : { <KEYWORD_POPLOC : "#Pop_Loc" > }
+<DEFAULT> TOKEN : { <KEYWORD_ACTION : "#ActionCount" > }
+
+<DEFAULT> TOKEN : { <WORD_TIME : "time" > }
+
+<DEFAULT> TOKEN : { <EOL : ";" > }
+<DEFAULT> TOKEN : { <PLUS : "+" > }
+<DEFAULT> TOKEN : { <DOT : "." > }
+<DEFAULT> TOKEN : { <SEMICOLON : ":" > }
+<DEFAULT> TOKEN : { <DEFINE : ":=" > }
+
+<DEFAULT> TOKEN : { <ASSIGN : "=" >}
+<DEFAULT> TOKEN : { <LSQ : "[" >}
+<DEFAULT> TOKEN : { <RSQ : "]" >}
+<DEFAULT> TOKEN : { <LR : "(" > }
+<DEFAULT> TOKEN : { <RR : ")" > }
+<DEFAULT> TOKEN : { <QUO : "\"" > }
+<DEFAULT> TOKEN : { <SQUO : "\'" > }
+<DEFAULT> TOKEN : { <EXCL : "!" > }
+<DEFAULT> TOKEN : { <LBRAC : "{" > }
+<DEFAULT> TOKEN : { <RBRAC : "}" > }
+
+<DEFAULT> TOKEN : { <COMMA : "," >}
+<DEFAULT> TOKEN : { <LANG : "<" > }
+<DEFAULT> TOKEN : { <RANG : ">" > }
+<DEFAULT> TOKEN : { <PARALLEL : "||" > }
+
+<DEFAULT> TOKEN : { <DASH : "-" > }
+
+<DEFAULT> TOKEN : { <UP : ">>" > }
+<DEFAULT> TOKEN : { <DOWN : "<<" > }
+
+/*<DEFAULT> TOKEN: { <MELASYMBOL: < DOT > > }*/
+
+<DEFAULT> TOKEN : {<INT : <INTEGER> > }
+<DEFAULT> TOKEN : {<DOUBLE : <FLOAT>|<FLOAT_SCIENTIFIC> > }
+<DEFAULT> TOKEN: { <IDENTIFIER: <LETTER>(<LETTER>|<DIGIT>|"_"|"$"|"#")*> }
+
+/*<DEFAULT> TOKEN: { <UPDATE_LOC: <WORD>> } */
+
+<MATH> TOKEN : { <MATH_EXPR : (<DIGIT> | <SYMBOL> | <SPACE> | <M_AND> | <M_OR> | <M_LINER> | <M_LINEN> | <SQUO>)+ > : DEFAULT }
+<MATH> TOKEN : { <#SPACE : " " | "\t"> }
+<MATH> TOKEN : { <#M_AND : "&&" > }
+<MATH> TOKEN : { <#M_OR : "|"> }
+<MATH> TOKEN : { <#M_LINER : "\r"> }
+<MATH> TOKEN : { <#M_LINEN : "\n"> }
+
+
+TOKEN : { <#SYMBOL : [".", "=", "+", "-", "*", "/", "%", "^", "(", ")", "!", "<", ">", ",", "_", "[","]" ]> }
+TOKEN : { <#PARAM_SYMBOL : [".", "+", "-", "*", "/", "%", "^" ]> }
+
+
+/***********************************************
+GRAMMAR RULES
+***********************************************/
+
+void Input() throws NumberFormatException, RuntimeException, ParseException :
+{
+    Token action, time_boundary, boundary = null, focus, runs = null, step;    
+}
+{   
+    time_boundary = BoundChoice()
+    {GlobalManager.WhileMethod();}   
+    
+    (<KEYWORD_BOUNDARY>
+    <SEMICOLON>
+    boundary = BoundaryOptions())?
+    
+    {if (boundary == null){
+    GlobalManager.getLocationManager().boundary = "periodic";}
+    }   
+    (<SECTION_RUN>
+    <ASSIGN>
+    runs = <INT>
+    {int runsint = Integer.parseInt(runs.image);
+    GlobalManager.Runs = runsint;}
+    /*<SECTION_STEP>
+    <ASSIGN>
+    step = <DOUBLE>
+    {double stepValue = Double.parseDouble(step.image);
+    GlobalManager.Step = stepValue;}*/
+    )?
+    (<SECTION_NAME>
+    <SEMICOLON>
+   	action = ActionChoice())*
+    (<SECTION_FOCUS>
+    <SEMICOLON>
+    focus = <IDENTIFIER>
+    {GlobalManager.SpecificType = focus.image;}
+    )*
+    {String[] StringForMain = new String[1];
+    StringForMain[0] = " ";
+    if (runs == null){
+    Simulator2.main(StringForMain);
+    System.out.println("Normal simulation");} }  
+    <EOF>
+}
+
+
+Token ActionChoice() throws NumberFormatException, RuntimeException, ParseException :
+{Token type=null, nameAction= null;}
+{   
+    [   
+        LOOKAHEAD(1)
+        type = < KEYWORD_ACTIVE >
+        nameAction = <IDENTIFIER>
+        {GlobalManager.actionToTrack = nameAction.image;
+         GlobalManager.actionChosenType = type.image;}
+        |
+        LOOKAHEAD(1)
+        type = <  KEYWORD_PASSIVE > 
+        nameAction = <IDENTIFIER>    
+        {GlobalManager.actionToTrack = nameAction.image;
+         GlobalManager.actionChosenType = type.image;}
+        |
+        LOOKAHEAD(1)
+        type = <  KEYWORD_NOINF > 
+        nameAction = <IDENTIFIER>  
+        {GlobalManager.actionToTrack = nameAction.image;
+         GlobalManager.actionChosenType = type.image;}
+    ]
+    {
+      return type;
+      return nameAction;
+    }   
+}
+
+
+Token BoundChoice() throws NumberFormatException, RuntimeException, ParseException :
+{Token bound=null, timeTotal=null, nameAgent, actionName=null, actionValue=null, x=null,y=null,z=null;}
+{   
+    [   
+        LOOKAHEAD(2)
+        bound = < KEYWORD_TIME >
+        <SEMICOLON>
+        <WORD_TIME>
+        <ASSIGN>
+        timeTotal = <INT>
+        {GlobalManager.boundary = bound.image;
+        int total = Integer.parseInt(timeTotal.image);
+        GlobalManager.timeTotal = total;
+        GlobalManager.WhileMethod();}
+        |
+        LOOKAHEAD(2)
+        bound = <  KEYWORD_POPULATION >
+        <SEMICOLON>
+        nameAgent = <IDENTIFIER>
+        {GlobalManager.boundary = bound.image;  
+        GlobalManager.nameAgentToTrack = nameAgent.image;
+        GlobalManager.WhileMethod();}
+        |
+        LOOKAHEAD(2)
+        bound = <  KEYWORD_POPLOC >
+        <SEMICOLON>
+        nameAgent = <IDENTIFIER>
+        <LR>     
+        x = <INT>
+        (
+        <COMMA>
+        y = <INT>
+        (
+        <COMMA>
+        z = <INT>
+        )?
+        )?    
+        <RR>     
+{if (!(GlobalManager.getAgentManager().AgentNames.contains(nameAgent.image))) {throw new ParseException("The declared agent is not described in the section #Agents");}
+ 
+ if(GlobalManager.getLocationManager().SpatialSt == "Graph"){
+   int xValue = Integer.parseInt(x.image);
+   ArrayList<Integer> LocName = GlobalManager.createListOneD(xValue);
+   if (y == null && z ==null && GlobalManager.getLocationManager().AllLoc.contains(LocName))
+   {GlobalManager.boundary = bound.image;  
+    GlobalManager.nameAgentToTrack = nameAgent.image;
+    GlobalManager.LocToTrack = LocName;
+    GlobalManager.WhileMethod();
+   }else
+   {throw new ParseException("The input location does not exist");}
+    }
+  else if (GlobalManager.getLocationManager().SpatialSt.matches("(?i).*OneD*"))
+    {int xValue = Integer.parseInt(x.image);
+     ArrayList<Integer> LocName = GlobalManager.createListOneD(xValue); 
+     if (y == null && z ==null && GlobalManager.getLocationManager().AllLoc.contains(LocName))
+     {GlobalManager.boundary = bound.image;  
+      GlobalManager.nameAgentToTrack = nameAgent.image;
+      GlobalManager.LocToTrack = LocName;
+      GlobalManager.WhileMethod();
+      }else
+      {throw new ParseException("The input location does not exist");}
+      } 
+    else if (GlobalManager.getLocationManager().SpatialSt.matches("(?i).*TwoD*"))
+ 	   {if (y==null)
+       {throw new ParseException("The input location does not exist");} 
+       int xValue = Integer.parseInt(x.image);    
+       int yValue = Integer.parseInt(y.image);
+       ArrayList<Integer> LocName = GlobalManager.createListTwoD(xValue, yValue);
+       if (z ==null && GlobalManager.getLocationManager().AllLoc.contains(LocName))
+       {GlobalManager.boundary = bound.image;  
+        GlobalManager.nameAgentToTrack = nameAgent.image;
+        GlobalManager.LocToTrack = LocName;
+        GlobalManager.WhileMethod();
+        }else
+        {throw new ParseException("The input location does not exist");}
+        }  
+   	 else if (GlobalManager.getLocationManager().SpatialSt.matches("(?i).*ThreeD*"))
+   	   {int xValue = Integer.parseInt(x.image);
+        if (y==null)
+        {throw new ParseException("The input location does not exist");}
+        int yValue = Integer.parseInt(y.image);
+        if (z==null)
+        {throw new ParseException("The input location does not exist");}
+        int zValue = Integer.parseInt(z.image);
+        ArrayList<Integer> LocName = GlobalManager.createListThreeD(xValue,yValue,zValue);
+        if (GlobalManager.getLocationManager().AllLoc.contains(LocName))
+        {GlobalManager.boundary = bound.image;  
+        GlobalManager.nameAgentToTrack = nameAgent.image;
+        GlobalManager.LocToTrack = LocName;
+        GlobalManager.WhileMethod();}else
+        {throw new ParseException("The input location does not exist");}
+        }
+}         
+        |   
+        LOOKAHEAD(2)
+        bound = <  KEYWORD_ACTION >
+        <SEMICOLON>
+        actionName = <IDENTIFIER>
+        <ASSIGN>
+        actionValue = <INT>
+        {GlobalManager.boundary = bound.image;
+        GlobalManager.nameActionToCount = actionName.image;
+        int value = Integer.parseInt(actionValue.image);
+	    GlobalManager.valueToCount = value;
+        GlobalManager.WhileMethod();}
+    ]
+    {
+      return bound;
+    }       
+    }
+    
+    
+Token BoundaryOptions() throws NumberFormatException, RuntimeException, ParseException :
+{Token name=null;}
+{   
+    [   
+        LOOKAHEAD(1)
+        name = < KEYWORD_PERIODIC >
+        {GlobalManager.getLocationManager().boundary = name.image;}
+        |
+        LOOKAHEAD(1)
+        name = < KEYWORD_BOUNCING >
+        {GlobalManager.getLocationManager().boundary = name.image;}
+        |
+        LOOKAHEAD(1)
+        name = < KEYWORD_FIXED >
+        {GlobalManager.getLocationManager().boundary = name.image;}
+    ]
+    {
+      return name;
+    }   
+
+
+
+    
+}
